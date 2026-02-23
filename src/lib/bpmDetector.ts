@@ -138,12 +138,20 @@ function findBPM(intervals: number[]): { bpm: number; confidence: number } {
     }
   }
   
-  if (bestBucket === 0) {
+  // Guard against zero or Infinity (Priority 5 - Issue #3)
+  if (bestBucket === 0 || !Number.isFinite(bestBucket)) {
     return { bpm: 0, confidence: 0 };
   }
   
   const bpm = 60 / bestBucket;
-  const confidence = maxCount / intervals.length;
+  
+  // Guard against Infinity result (Priority 5 - Issue #3)
+  if (!Number.isFinite(bpm) || bpm <= 0) {
+    return { bpm: 0, confidence: 0 };
+  }
+  
+  // Clamp confidence to [0,1] (Priority 5 - Issue #14)
+  const confidence = Math.min(1, maxCount / intervals.length);
   
   // Normalize BPM to common ranges
   let normalizedBPM = bpm;

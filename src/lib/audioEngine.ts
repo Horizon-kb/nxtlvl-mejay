@@ -7,7 +7,18 @@ export type DeckId = 'A' | 'B';
 
 export type VibesPreset = 'flat' | 'warm' | 'bright' | 'club' | 'vocal';
 
+export enum DeckStateEnum {
+  EMPTY = 'EMPTY',           // No track loaded
+  LOADING = 'LOADING',       // Awaiting decode
+  READY = 'READY',           // Track loaded, can play
+  PLAYING = 'PLAYING',       // Audio running
+  STOPPING = 'STOPPING',     // Requested stop
+  STOPPED = 'STOPPED',       // Fully stopped
+  ERROR = 'ERROR'            // Error state
+}
+
 interface DeckState {
+  state: DeckStateEnum;      // Current deck lifecycle state
   audioBuffer: AudioBuffer | null;
   sourceNode: AudioBufferSourceNode | null;
   gainNode: GainNode | null;
@@ -68,6 +79,7 @@ class AudioEngine {
 
   private createEmptyDeck(): DeckState {
     return {
+      state: DeckStateEnum.EMPTY,
       audioBuffer: null,
       sourceNode: null,
       gainNode: null,
@@ -86,6 +98,14 @@ class AudioEngine {
       scheduledStartTimeoutId: null,
       tempoRamp: null,
     };
+  }
+
+  private logEvent(event: string, data: Record<string, any>): void {
+    if (import.meta.env.DEV) {
+      const ts = this.audioContext?.currentTime ?? Date.now();
+      console.log(`[AudioEngine/${event}] @${ts}`, data);
+    }
+    // TODO Phase 2: Optional remote telemetry
   }
 
   private dbToLinear(db: number): number {
@@ -232,7 +252,8 @@ class AudioEngine {
     const ramp = deckState.tempoRamp;
     if (!ramp) {
       const elapsed = ctxTime - deckState.lastCtx;
-      deckState.trackAtLastCtx += elapsed * deckState.playbackRate;
+      // Clamp to duration to prevent overflow (Priority 4 - Issue #2)
+      deckState.trackAtLastCtx = Math.min(deckState.duration, deckState.trackAtLastCtx + elapsed * deckState.playbackRate);
       deckState.lastCtx = ctxTime;
       return;
     }
@@ -242,7 +263,8 @@ class AudioEngine {
       const t1 = Math.min(ctxTime, ramp.startTime);
       const elapsed = t1 - deckState.lastCtx;
       if (elapsed > 0) {
-        deckState.trackAtLastCtx += elapsed * deckState.playbackRate;
+        // Clamp to duration (Priority 4 - Issue #2)
+        deckState.trackAtLastCtx = Math.min(deckState.duration, deckState.trackAtLastCtx + elapsed * deckState.playbackRate);
         deckState.lastCtx = t1;
       }
     }
@@ -261,7 +283,8 @@ class AudioEngine {
 
         // Integral of (startRate + k*(t - startTime)) dt from segStart..segEnd
         const integral = ramp.startRate * (segEnd - segStart) + 0.5 * k * (b * b - a * a);
-        deckState.trackAtLastCtx += integral;
+        // Clamp to duration to prevent overflow (Priority 4 - Issue #2)
+        deckState.trackAtLastCtx = Math.min(deckState.duration, deckState.trackAtLastCtx + integral);
         deckState.lastCtx = segEnd;
       }
     }
@@ -275,7 +298,8 @@ class AudioEngine {
 
     if (!deckState.tempoRamp && deckState.lastCtx < ctxTime) {
       const elapsed = ctxTime - deckState.lastCtx;
-      deckState.trackAtLastCtx += elapsed * deckState.playbackRate;
+      // Clamp to duration (Priority 4 - Issue #2)
+      deckState.trackAtLastCtx = Math.min(deckState.duration, deckState.trackAtLastCtx + elapsed * deckState.playbackRate);
       deckState.lastCtx = ctxTime;
     }
   }
@@ -293,7 +317,11 @@ class AudioEngine {
     const bpm = deckState.baseBpm || 120;
     const rate = this.getEffectivePlaybackRateAt(deck, this.audioContext.currentTime) || 1;
 
-    if (!bpm || bpm <= 0 || rate <= 0) return this.audioContext.currentTime;
+    // Strict validation: guard against Infinity/NaN (Priority 2 - Issue #4)
+    if (!Number.isFinite(bpm) || bpm <= 0 || !Number.isFinite(rate) || rate <= 0) {
+      this.logEvent('getNextBeatTime_invalid_params', { deck, bpm, rate });
+      return this.audioContext.currentTime;
+    }
 
     const beatIntervalTrack = (60 / bpm) * Math.max(1, Math.floor(beatMultiple));
     const trackTime = this.getCurrentTime(deck);
@@ -372,7 +400,21 @@ class AudioEngine {
     }
 
     const deckState = this.decks[deck];
+    
+    // Guard by state: only play if READY or PLAYING (prevents race condition)
+    if (deckState.state !== DeckStateEnum.READY && deckState.state !== DeckStateEnum.PLAYING) {
+      this.logEvent('playAt_blocked', {
+        deck,
+        reason: `state is ${deckState.state}, expected READY or PLAYING`,
+      });
+      return;
+    }
+    
     if (deckState.isPlaying) return;
+    
+    // Update state
+    deckState.state = DeckStateEnum.PLAYING;
+    this.logEvent('playAt_scheduled', { deck, whenTime });
 
     // Cancel any previous schedule
     this.clearScheduledStart(deck);
@@ -646,8 +688,17 @@ class AudioEngine {
       try {
         deckState.trackGainNode.gain.cancelScheduledValues(now);
         deckState.trackGainNode.gain.setTargetAtTime(linearGain, now, 0.2);
-      } catch {
-        deckState.trackGainNode.gain.value = linearGain;
+      } catch (error) {
+        this.logEvent('setTrackGain_ramp_failed', {
+          deck,
+          error: String(error),
+          fallback: 'immediate',
+        });
+        try {
+          deckState.trackGainNode.gain.value = linearGain;
+        } catch {
+          // Silent fallback if immediate set also fails
+        }
       }
     }
   }
@@ -657,11 +708,25 @@ class AudioEngine {
     
     if (!this.audioContext) throw new Error('Audio context not initialized');
 
+    const deckState = this.decks[deck];
+    deckState.state = DeckStateEnum.LOADING;
+    this.logEvent('load_track_started', { deck });
+
     // Stop any current playback on this deck
     this.stop(deck);
+    deckState.state = DeckStateEnum.LOADING;  // Re-set after stop cleared it
 
     const arrayBuffer = await blob.arrayBuffer();
     const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+    
+    // Validate audio buffer (Priority 2 - Issue #5)
+    if (!Number.isFinite(audioBuffer.duration) || audioBuffer.duration <= 0) {
+      deckState.state = DeckStateEnum.ERROR;
+      this.logEvent('load_track_failed', { deck, reason: `Invalid duration: ${audioBuffer.duration}` });
+      throw new Error(
+        `Invalid audio buffer: duration must be > 0 (got ${audioBuffer.duration})`
+      );
+    }
     
     this.decks[deck].audioBuffer = audioBuffer;
     this.decks[deck].duration = audioBuffer.duration;
@@ -681,6 +746,8 @@ class AudioEngine {
       this.setTrackGain(deck, 0);
     }
 
+    deckState.state = DeckStateEnum.READY;
+    this.logEvent('load_track_ready', { deck, duration: audioBuffer.duration });
     return audioBuffer.duration;
   }
 
@@ -713,7 +780,13 @@ class AudioEngine {
   }
 
   setBaseBpm(deck: DeckId, bpm: number): void {
-    this.decks[deck].baseBpm = bpm;
+    // Validate BPM (Priority 2 - Issue #13)
+    if (!Number.isFinite(bpm) || bpm <= 0) {
+      this.logEvent('setBaseBpm_invalid', { deck, bpm, fallback: 120 });
+      this.decks[deck].baseBpm = 120;
+    } else {
+      this.decks[deck].baseBpm = bpm;
+    }
   }
 
   // Calculate tempo ratio to match target BPM
@@ -745,8 +818,21 @@ class AudioEngine {
 
     const deckState = this.decks[deck];
     
+    // Guard by state: only play if READY or PLAYING (prevents race condition)
+    if (deckState.state !== DeckStateEnum.READY && deckState.state !== DeckStateEnum.PLAYING) {
+      this.logEvent('play_blocked', {
+        deck,
+        reason: `state is ${deckState.state}, expected READY or PLAYING`,
+      });
+      return;
+    }
+    
     // If already playing, do nothing
     if (deckState.isPlaying) return;
+    
+    // Update state
+    deckState.state = DeckStateEnum.PLAYING;
+    this.logEvent('play_started', { deck });
 
     // Create new source node
     const source = this.audioContext.createBufferSource();
@@ -802,6 +888,8 @@ class AudioEngine {
     deckState.sourceNode.disconnect();
     deckState.sourceNode = null;
     deckState.isPlaying = false;
+    deckState.state = DeckStateEnum.STOPPED;
+    this.logEvent('pause', { deck, position: deckState.pausedAt });
   }
 
   // Call before stop() when you *don't* want onended to be treated as a real ending
@@ -813,6 +901,7 @@ class AudioEngine {
   stop(deck: DeckId): void {
     const deckState = this.decks[deck];
     this.clearScheduledStart(deck);
+    deckState.state = DeckStateEnum.STOPPING;
     if (deckState.sourceNode) {
       try {
         deckState.sourceNode.stop();
@@ -828,6 +917,8 @@ class AudioEngine {
     deckState.lastCtx = 0;
     deckState.currentTime = 0;
     deckState.tempoRamp = null;
+    deckState.state = DeckStateEnum.STOPPED;
+    this.logEvent('stop', { deck });
   }
 
   getCurrentTime(deck: DeckId): number {
@@ -1054,6 +1145,11 @@ class AudioEngine {
     }
     this.stop('A');
     this.stop('B');
+    
+    // Explicit state reset (Priority 3 - cleanup)
+    this.decks.A.state = DeckStateEnum.EMPTY;
+    this.decks.B.state = DeckStateEnum.EMPTY;
+    
     if (this.audioContext) {
       this.audioContext.close();
       this.audioContext = null;
@@ -1065,6 +1161,12 @@ class AudioEngine {
     this.vibeLowShelf = null;
     this.vibeMidPeak = null;
     this.vibeHighShelf = null;
+    
+    // Null out all deck node references (Priority 3 - cleanup)
+    this.decks.A.gainNode = null;
+    this.decks.A.trackGainNode = null;
+    this.decks.B.gainNode = null;
+    this.decks.B.trackGainNode = null;
   }
 }
 

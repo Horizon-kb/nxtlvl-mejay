@@ -1,0 +1,182 @@
+{
+  "project": "MeJay",
+  "description": "Browser-based Auto DJ with React + Vite + Web Audio API",
+  "root": "C:\\Users\\klaws\\clawd\\projects\\mejay",
+  "package_manager": "bun",
+  "entry_point": "src/main.tsx",
+  "dev_port": 8080,
+  "directories": {
+    "src": {
+      "description": "Application source code",
+      "subdirs": {
+        "lib": {
+          "description": "Audio engine + utility libraries",
+          "files": [
+            "audioEngine.ts (1,200 LOC) — Dual-deck playback, crossfade, tempo, volume",
+            "bpmDetector.ts (150 LOC) — Peak detection + BPM estimation",
+            "tempoMatch.ts (250 LOC) — BPM matching + cap logic",
+            "tempoPresets.ts (100 LOC) — Discrete tempo presets",
+            "trueEndTime.ts (80 LOC) — Musical end detection",
+            "db.ts (400 LOC) — IndexedDB schema + CRUD",
+            "mediaSession.ts — Web Media Session API",
+            "utils.ts — Utility functions",
+            "branding.ts, checkout.ts, starterPacksPrefs.ts — Gating + config"
+          ]
+        },
+        "stores": {
+          "description": "Zustand state management",
+          "files": [
+            "djStore.ts (3,200+ LOC) — Main state: tracks, decks, party mode, settings",
+            "planStore.ts — Transition planning state",
+            "licenseStore.ts — License state"
+          ]
+        },
+        "components": {
+          "description": "React UI components",
+          "subdirs": {
+            "party": {
+              "files": [
+                "MixControls.tsx — Crossfade + mix timing",
+                "TempoControls.tsx — BPM matching UI",
+                "VolumeControls.tsx — Gain + limiter controls",
+                "NowPlaying.tsx — Current track display",
+                "PartyQueuePanel.tsx — Queue + reorder",
+                "PartySourceChooser.tsx — Import vs Playlist source"
+              ]
+            },
+            "ui": {
+              "description": "shadcn/ui component library (70+ components)",
+              "note": "Standard UI primitives; not project-specific"
+            }
+          }
+        },
+        "pages": {
+          "description": "Route pages",
+          "files": [
+            "Index.tsx — Home/landing",
+            "NotFound.tsx — 404"
+          ]
+        },
+        "app": {
+          "description": "Application layout + navigation",
+          "files": [
+            "index.ts — App entry",
+            "pages/ — Authenticated routes (Library, Party, Playlists, Settings)",
+            "hooks/ — Custom hooks (useGradientParallax, etc.)"
+          ]
+        },
+        "config": {
+          "description": "Configuration + constants",
+          "files": [
+            "starterPacks.ts — Bundled track definitions"
+          ]
+        },
+        "licensing": {
+          "description": "License + entitlement logic",
+          "files": [
+            "licenseApi.ts, licensePolicy.ts, licenseService.ts, licenseToken.ts"
+          ]
+        },
+        "test": {
+          "description": "Test setup + examples",
+          "files": [
+            "setup.ts — Vitest configuration",
+            "example.test.ts — Sample test"
+          ]
+        },
+        "adapters": {
+          "description": "External service adapters",
+          "note": "Currently minimal"
+        },
+        "core": {
+          "description": "Core types + exports",
+          "note": "Re-exports from lib"
+        },
+        "engines": {
+          "description": "Future expansion: specialized audio engines",
+          "note": "Currently empty; planned for advanced mixing"
+        },
+        "assets": {
+          "description": "Static assets (images, icons)",
+          "files": [
+            "me-jay-logo.png"
+          ]
+        },
+        "hooks": {
+          "description": "Custom React hooks",
+          "files": [
+            "use-mobile.tsx, use-toast.ts"
+          ]
+        }
+      }
+    },
+    "public": {
+      "description": "Static files served as-is",
+      "files": [
+        "_redirects — SPA routing (Netlify/Cloudflare)",
+        "index.html — Will be served"
+      ]
+    },
+    "functions": {
+      "description": "Cloudflare Pages Functions (serverless backend)",
+      "subdirs": {
+        "api": {
+          "auth": ["start.ts (login code email)", "verify.ts (code verification)"],
+          "download": ["full-program.ts (Stripe → download link)"]
+        }
+      }
+    },
+    "migrations": {
+      "description": "Database migration scripts (not active in browser app)",
+      "note": "Retained for reference; IndexedDB is client-side only"
+    },
+    "docs": {
+      "description": "Documentation",
+      "note": "Sparse; main docs are in README.md"
+    }
+  },
+  "config_files": {
+    "package.json": "Dependencies, scripts, version",
+    "vite.config.ts": "Build config (port 8080, @ alias, component tagger)",
+    "tsconfig.json": "TypeScript root config",
+    "tsconfig.app.json": "App-specific TypeScript config",
+    "tsconfig.node.json": "Node/build tools config",
+    "tsconfig.vitest.json": "Test-specific config",
+    "vitest.config.ts": "Test runner config",
+    "eslint.config.js": "Lint rules",
+    "tailwind.config.ts": "Tailwind CSS config",
+    "postcss.config.js": "PostCSS plugins",
+    "components.json": "shadcn/ui component registry",
+    "wrangler.toml": "Cloudflare Worker config (if deploying API separately)"
+  },
+  "key_entry_points": {
+    "main": "src/main.tsx — React app root",
+    "worker": "src/worker.ts — Optional Cloudflare Worker entrypoint",
+    "audio_engine": "src/lib/audioEngine.ts — Dual-deck playback",
+    "state": "src/stores/djStore.ts — App state + transitions"
+  },
+  "critical_files_for_phase_1": [
+    "src/lib/audioEngine.ts — Race condition, state enum needed",
+    "src/stores/djStore.ts — State tracking, deck lifecycle",
+    "src/lib/bpmDetector.ts — BPM validation, Infinity guard",
+    "src/lib/db.ts — Audio buffer validation on load"
+  ],
+  "safe_to_ignore_for_phase_1": [
+    "functions/ — Backend; not required for audio stability",
+    "migrations/ — Legacy; no active DB migrations",
+    "docs/ — Reference only",
+    "components/ui/ — Standard library; no audio logic",
+    "licensing/ — Gating logic; separate from audio"
+  ],
+  "build_artifacts": {
+    "dist/": "Production build output (not tracked)",
+    "node_modules/": "Dependencies (not tracked)",
+    ".bun/": "Bun cache (not tracked)"
+  },
+  "important_notes": {
+    "audio_blobs": "Audio files imported by users are stored as Blobs in IndexedDB; not persisted on disk",
+    "singlepage_routing": "React Router with SPA fallback (_redirects for deep links)",
+    "dev_bypass_auth": "Dev mode can bypass login with VITE_DEV_BYPASS_AUTH=1; not for production",
+    "bun_requirement": "This repo uses Bun (not npm); Bun must be installed and on PATH"
+  }
+}
