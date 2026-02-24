@@ -1561,7 +1561,7 @@ export const useDJStore = create<DJState>()(
             // Stop after the allowed overage track.
             toast({
               title: 'Import limit reached',
-              description: 'You\'ve hit the Free mode import limit. Upgrade to add more tracks.',
+              description: 'You have hit the Free mode import limit. Upgrade to add more tracks.',
             });
             usePlanStore.getState().openUpgradeModal();
             break;
