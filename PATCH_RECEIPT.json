@@ -20,6 +20,16 @@
       "risk": "Low",
       "change": "TOAST_REMOVE_DELAY: 1000000ms → 4000ms",
       "rollback": "git revert bce75d6"
+    },
+    {
+      "hash": "b2992f6",
+      "message": "Fix #20: Double logo size (h-32 → h-64)",
+      "files": ["src/pages/Index.tsx"],
+      "stability_class": "UX Polish",
+      "complexity": "Low",
+      "risk": "Low",
+      "change": "Logo height doubled: 128px → 256px, width/height attributes updated for aspect ratio",
+      "rollback": "git revert b2992f6"
     }
   ],
   "owner_approval": "John Steele",
