@@ -189,9 +189,9 @@ const Index = () => {
             <img
               src={MEJAY_LOGO_URL}
               alt="MEJay"
-              width="200"
-              height="128"
-              className="h-32 w-auto object-contain drop-shadow-[0_18px_60px_rgba(0,0,0,0.55)]"
+              width="400"
+              height="256"
+              className="h-64 w-auto object-contain drop-shadow-[0_18px_60px_rgba(0,0,0,0.55)]"
               style={{ aspectRatio: '200/128' }}
               fetchPriority="high"
               decoding="async"
