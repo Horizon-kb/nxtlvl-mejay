@@ -213,6 +213,9 @@ class AudioEngine {
   setTrueEndTime(deck: DeckId, trueEndTime: number | null | undefined): void {
     const deckState = this.decks[deck];
     if (typeof trueEndTime !== 'number' || !Number.isFinite(trueEndTime) || trueEndTime <= 0) {
+      if (import.meta.env.DEV && trueEndTime !== null && trueEndTime !== undefined) {
+        console.warn(`[setTrueEndTime] Rejecting invalid value for deck ${deck}:`, trueEndTime);
+      }
       deckState.trueEndTime = null;
       return;
     }
@@ -221,6 +224,14 @@ class AudioEngine {
     deckState.trueEndTime = (Number.isFinite(dur) && dur > 0)
       ? Math.max(0, Math.min(dur, trueEndTime))
       : trueEndTime;
+    
+    if (import.meta.env.DEV) {
+      this.logEvent('trueEndTime_set', {
+        deck,
+        trueEndTime: deckState.trueEndTime,
+        duration: deckState.duration,
+      });
+    }
   }
 
   private getEffectivePlaybackRateAt(deck: DeckId, ctxTime: number): number {

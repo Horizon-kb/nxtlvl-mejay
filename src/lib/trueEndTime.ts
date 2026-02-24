@@ -88,5 +88,17 @@ export function detectTrueEndTime(audioBuffer: AudioBuffer, opts: TrueEndTimeOpt
 
   // Mono is fine for v1; channel 0 is a good proxy.
   const ch0 = audioBuffer.getChannelData(0);
-  return detectTrueEndTimeFromChannelData(ch0, sampleRate, durationSec, opts);
+  const result = detectTrueEndTimeFromChannelData(ch0, sampleRate, durationSec, opts);
+  
+  // Dev logging
+  if (typeof globalThis !== 'undefined' && (globalThis as any).import?.meta?.env?.DEV) {
+    const trimmedMs = Math.round((durationSec - result) * 1000);
+    console.log('[detectTrueEndTime]', {
+      duration: durationSec.toFixed(2),
+      trueEnd: result.toFixed(2),
+      silenceTrimmed: trimmedMs > 0 ? `${trimmedMs}ms` : 'none',
+    });
+  }
+  
+  return result;
 }

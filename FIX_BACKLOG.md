@@ -1,8 +1,9 @@
 # MeJay Fix Backlog
 
 **Date:** 2026-02-23  
-**Total Issues:** 14 (3 Critical, 5 High, 4 Medium, 2 Low)  
+**Total Issues:** 15 (3 Critical, 5 High, 5 Medium, 2 Low)  
 **Phase 1 Scope:** Guard rails only (Priority 1 + selective Priority 2)  
+**Phase 2 Scope:** Silence detector wiring (#15)  
 **Phase 2+:** Full state machine + mutex (out of scope for now)
 
 ---
@@ -287,6 +288,38 @@ setBaseBpm(deck: DeckId, bpm: number): void {
 ```typescript
 const confidence = Math.min(1, maxCount / intervals.length);
 ```
+
+---
+
+## MEDIUM (Deferred to Phase 2)
+
+### 🟡 #15: Silence Detector Not Wired to Playback
+**File:** `src/stores/djStore.ts` (loadTrackToDeck)  
+**Severity:** MEDIUM  
+**Impact:** Trailing silence still included in mix timing despite being detected  
+**Root Cause:** `loadTrackToDeck()` loads track but never calls `audioEngine.setTrueEndTime()`
+
+**What Works:**
+- ✅ Silence detection runs during import
+- ✅ trueEndTime calculated and stored to Track object
+- ✅ Audio engine method exists to use it
+
+**What's Broken:**
+- ❌ During playback load, trueEndTime never passed to engine
+- ❌ Mix trigger uses full duration instead of trimmed end
+- ❌ Crossfades hit trailing silence
+
+**Phase 2 Fix:**
+```typescript
+// In loadTrackToDeck(), after audioEngine.loadTrack():
+const track = state.tracks.find(t => t.id === trackId);
+if (track?.trueEndTime) {
+  audioEngine.setTrueEndTime(deck, track.trueEndTime);
+}
+```
+
+**Lines:** ~3 LOC  
+**Complexity:** Trivial (single function call)
 
 ---
 
