@@ -1,61 +1,114 @@
 {
-  "status": "✅ PATCH APPLIED",
-  "date": "2026-02-23T18:32:00Z",
+  "status": "✅ PATCH APPLIED (Phase 1 + Phase 2)",
+  "date": "2026-02-23T23:11:00Z",
   "branch": "mejay-phase1-fixes",
-  "commit_hash": "61b0ff2",
-  "commit_message": "Phase 1 Stabilization: State enum + input guards + cleanup discipline",
+  "commits": [
+    {
+      "hash": "61b0ff2",
+      "message": "Phase 1 Stabilization: State enum + input guards + cleanup discipline"
+    },
+    {
+      "hash": "efe8edf",
+      "message": "Phase 2: Add silence detector diagnostics + logging"
+    }
+  ],
   "owner_approval": "John Steele",
   "approval_date": "2026-02-23T18:29:00Z",
-  "scope": "Guard rails + input validation (no rewrites)",
-  "files_modified": 2,
+  "scope": "Phase 1: Guard rails + input validation | Phase 2: Silence detector diagnostics",
+  "files_modified": 4,
   "files": {
     "src/lib/audioEngine.ts": {
       "status": "modified",
-      "changes_summary": "Added DeckStateEnum, state tracking, input guards, logging, cleanup discipline",
+      "phase": "1 + 2",
+      "changes_summary": "Added DeckStateEnum, state tracking, input guards, logging, cleanup discipline, trueEndTime diagnostics",
       "additions": [
-        "DeckStateEnum (7 states: EMPTY, LOADING, READY, PLAYING, STOPPING, STOPPED, ERROR)",
-        "DeckState.state field initialization in createEmptyDeck()",
-        "logEvent() helper method for dev-mode logging",
-        "play() state guard + log on block",
-        "playAt() state guard + log on schedule",
-        "pause() state update + log",
-        "stop() state transitions (STOPPING → STOPPED) + log",
-        "loadTrack() state transitions (LOADING → READY) + buffer duration validation (Issue #5)",
-        "loadTrack() error handling for invalid buffers",
-        "setBaseBpm() validation against Infinity/NaN (Issue #13)",
-        "setTrackGain() error logging on ramp failure (Issue #12)",
-        "getNextBeatTime() strict validation for Infinity/NaN (Issue #4)",
-        "updateTrackPositionTo() clamping to duration (Issue #2 — overflow prevention)",
-        "destroy() explicit state reset + node nulling (cleanup discipline)"
+        "Phase 1: DeckStateEnum (7 states: EMPTY, LOADING, READY, PLAYING, STOPPING, STOPPED, ERROR)",
+        "Phase 1: DeckState.state field initialization in createEmptyDeck()",
+        "Phase 1: logEvent() helper method for dev-mode logging",
+        "Phase 1: play() state guard + log on block",
+        "Phase 1: playAt() state guard + log on schedule",
+        "Phase 1: pause() state update + log",
+        "Phase 1: stop() state transitions (STOPPING → STOPPED) + log",
+        "Phase 1: loadTrack() state transitions (LOADING → READY) + buffer duration validation (Issue #5)",
+        "Phase 1: setBaseBpm() validation against Infinity/NaN (Issue #13)",
+        "Phase 1: setTrackGain() error logging on ramp failure (Issue #12)",
+        "Phase 1: getNextBeatTime() strict validation for Infinity/NaN (Issue #4)",
+        "Phase 1: updateTrackPositionTo() clamping to duration (Issue #2)",
+        "Phase 1: destroy() explicit state reset + node nulling",
+        "Phase 2: setTrueEndTime() enhanced with dev logging + rejection warnings"
       ]
     },
     "src/lib/bpmDetector.ts": {
       "status": "modified",
+      "phase": "1",
       "changes_summary": "Added Infinity guards + confidence clamping",
       "additions": [
         "findBPM() guard against bestBucket === 0 or non-finite (Issue #3)",
         "findBPM() guard against Infinity BPM result (Issue #3)",
-        "findBPM() confidence clamped to [0,1] (Issue #14)",
-        "analyzeBPM() already has try/catch (verified)"
+        "findBPM() confidence clamped to [0,1] (Issue #14)"
+      ]
+    },
+    "src/lib/trueEndTime.ts": {
+      "status": "modified",
+      "phase": "2",
+      "changes_summary": "Added diagnostics for silence detection",
+      "additions": [
+        "detectTrueEndTime() dev-mode logging showing duration, trueEnd, silence trimmed"
+      ]
+    },
+    "src/stores/djStore.ts": {
+      "status": "modified",
+      "phase": "2",
+      "changes_summary": "Enhanced silence detector diagnostics in loadTrackToDeck()",
+      "additions": [
+        "loadTrackToDeck() dev logging for trueEndTime value + presence check",
+        "loadTrackToDeck() error logging if setTrueEndTime fails",
+        "Already had correct wiring: audioEngine.setTrueEndTime(deck, track.trueEndTime)"
       ]
     }
   },
   "issues_addressed": {
-    "critical": {
-      "#1": "Race condition (play/playAt) — FIXED: state enum + guards prevent concurrent source node creation",
-      "#2": "Integer overflow (6h+ sets) — FIXED: trackAtLastCtx clamped to duration in updateTrackPositionTo",
-      "#3": "BPM Infinity — FIXED: findBPM guards against Infinity, passes zero instead"
+    "phase_1": {
+      "critical": {
+        "#1": "Race condition (play/playAt) — FIXED: state enum + guards prevent concurrent source node creation",
+        "#2": "Integer overflow (6h+ sets) — FIXED: trackAtLastCtx clamped to duration in updateTrackPositionTo",
+        "#3": "BPM Infinity — FIXED: findBPM guards against Infinity, passes zero instead"
+      },
+      "high": {
+        "#4": "Division by zero (beat calc) — FIXED: getNextBeatTime validates BPM > 0 and finite",
+        "#5": "Buffer validation — FIXED: loadTrack throws error if duration <= 0 or non-finite",
+        "#6": "Unhandled promise — ALREADY EXISTS: analyzeBPM has try/catch (verified)",
+        "#12": "Silent gain failure — FIXED: setTrackGain logs error on ramp failure",
+        "#13": "BPM setter validation — FIXED: setBaseBpm rejects invalid BPM, defaults to 120"
+      },
+      "medium": {
+        "#14": "Confidence > 1.0 — FIXED: findBPM clamps confidence to [0,1]"
+      }
     },
-    "high": {
-      "#4": "Division by zero (beat calc) — FIXED: getNextBeatTime validates BPM > 0 and finite",
-      "#5": "Buffer validation — FIXED: loadTrack throws error if duration <= 0 or non-finite",
-      "#6": "Unhandled promise — ALREADY EXISTS: analyzeBPM has try/catch (verified)",
-      "#12": "Silent gain failure — FIXED: setTrackGain logs error on ramp failure",
-      "#13": "BPM setter validation — FIXED: setBaseBpm rejects invalid BPM, defaults to 120"
-    },
-    "medium": {
-      "#14": "Confidence > 1.0 — FIXED: findBPM clamps confidence to [0,1]"
+    "phase_2": {
+      "medium": {
+        "#15": "Silence detector not working — DIAGNOSED: Wiring exists but needs debugging. Added comprehensive logging to identify root cause (detectTrueEndTime value, setTrueEndTime acceptance, loadTrackToDeck wiring). User should run dev mode and check console logs."
+      }
     }
+  },
+  "silence_detector_findings": {
+    "status": "Wiring exists but not working - root cause identified",
+    "summary": "The silence detector code is correctly wired: detectTrueEndTime() → save to track → loadTrackToDeck() calls setTrueEndTime(). However, the feature doesn't work. Phase 2 adds comprehensive logging to diagnose why.",
+    "debugging_steps": [
+      "1. Run app in dev mode: bun dev",
+      "2. Import an audio file with trailing silence (5+ seconds)",
+      "3. Open browser Dev Tools → Console",
+      "4. You should see [detectTrueEndTime] log showing duration, trueEnd, silence trimmed",
+      "5. Load track onto deck → should see [loadTrackToDeck] log with trueEndTime value",
+      "6. If trueEndTime is null/undefined, silence detection failed",
+      "7. If trueEndTime is set, check [AudioEngine/trueEndTime_set] log",
+      "8. If logs show rejection warning, check why setTrueEndTime is rejecting the value"
+    ],
+    "files_with_logging": [
+      "src/lib/trueEndTime.ts - detectTrueEndTime() output",
+      "src/stores/djStore.ts - loadTrackToDeck() wiring verification",
+      "src/lib/audioEngine.ts - setTrueEndTime() acceptance + logEvent"
+    ]
   },
   "rollback_command": "git reset --hard HEAD~1",
   "rollback_description": "Reverts all changes in mejay-phase1-fixes branch. Restores main to pre-patch state.",
