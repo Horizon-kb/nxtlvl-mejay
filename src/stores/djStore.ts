@@ -10,6 +10,7 @@ import { usePlanStore } from '@/stores/planStore';
 import { toast } from '@/hooks/use-toast';
 import { detectTrueEndTime } from '@/lib/trueEndTime';
 import { valentine2026Pack, partyPack } from '@/config/starterPacks';
+import JSZip from 'jszip';
 
 interface DeckState {
   trackId: string | null;
@@ -1236,6 +1237,78 @@ export const useDJStore = create<DJState>()(
           set(state => ({
             tracks: [...seeded, ...state.tracks],
           }));
+        }
+
+        // Trigger browser-safe download of starter pack files
+        try {
+          const zip = new JSZip();
+          
+          // Organize files by pack name
+          for (const starter of seeded) {
+            // Determine pack folder
+            let packFolder = 'starter-packs';
+            if (starter.id.startsWith('val-')) {
+              packFolder = 'starter-packs/valentine-2026';
+            } else if (starter.id.startsWith('party-')) {
+              packFolder = 'starter-packs/party-pack';
+            }
+            
+            // Fetch the MP3 file
+            try {
+              const response = await fetch(starter.localPath || starter.id);
+              if (response.ok) {
+                const blob = await response.blob();
+                // Create safe filename from title and artist
+                const filename = `${starter.artist} - ${starter.displayName}.mp3`
+                  .replace(/[\/\\:*?"<>|]/g, '_'); // Sanitize filename
+                zip.folder(packFolder)?.file(filename, blob);
+              }
+            } catch {
+              // Skip individual file errors, continue with ZIP
+            }
+          }
+          
+          // Generate ZIP blob and trigger download
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const url = URL.createObjectURL(zipBlob);
+          
+          // Create anchor element for browser-safe download
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          
+          // Determine pack name for filename
+          const packNames = packIds
+            .map((id) => {
+              if (id === 'valentine-2026') return 'valentine-2026';
+              if (id === 'party-pack') return 'party-pack';
+              return id;
+            })
+            .join('_');
+          anchor.download = `mejay-starter-packs-${packNames}-${new Date().toISOString().split('T')[0]}.zip`;
+          
+          // Append to DOM, click, and clean up
+          document.body.appendChild(anchor);
+          anchor.click();
+          document.body.removeChild(anchor);
+          
+          // Clean up blob URL after a delay to allow download to start
+          setTimeout(() => {
+            URL.revokeObjectURL(url);
+          }, 100);
+          
+          // Show success toast notification
+          toast({
+            title: 'Starter pack downloaded',
+            description: 'Starter pack downloaded to your browser\'s default download location',
+          });
+        } catch (e) {
+          // Log error but don't fail the function - tracks are already added
+          console.error('[DJ Store] Failed to create starter pack ZIP:', e);
+          // Still show a success toast since tracks were added
+          toast({
+            title: 'Tracks imported',
+            description: 'Your starter pack tracks have been added to the library.',
+          });
         }
       }
 
