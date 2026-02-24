@@ -10,6 +10,16 @@
     {
       "hash": "efe8edf",
       "message": "Phase 2: Add silence detector diagnostics + logging"
+    },
+    {
+      "hash": "bce75d6",
+      "message": "Fix #18: Toast messages auto-dismiss after 4 seconds",
+      "files": ["src/hooks/use-toast.ts"],
+      "stability_class": "UX Stability",
+      "complexity": "Low",
+      "risk": "Low",
+      "change": "TOAST_REMOVE_DELAY: 1000000ms → 4000ms",
+      "rollback": "git revert bce75d6"
     }
   ],
   "owner_approval": "John Steele",
